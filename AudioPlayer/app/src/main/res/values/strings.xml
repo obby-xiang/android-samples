@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">AudioPlayer</string>
+    <string name="settings">Settings</string>
+    <string name="floating_window">Floating window</string>
+    <string name="loop">Loop</string>
+    <string name="close_when_finished">Close when finished</string>
+    <string name="tips">Tips: Choose this app to play audio (◕ᴗ◕✿)</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="display_overlay_permission_request">Display overlay permission required to display the audio player window, grant the permission?</string>
 </resources>
