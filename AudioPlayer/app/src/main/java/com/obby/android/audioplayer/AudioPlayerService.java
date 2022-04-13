@@ -103,7 +103,7 @@ public class AudioPlayerService extends Service {
                 mMediaPlayer.setLooping(!mMediaPlayer.isLooping());
                 updatePlayback();
             } else if (INTENT_ACTION_EXIT.equals(action)) {
-                exit();
+                stopSelf();
             }
         }
     };
@@ -143,7 +143,7 @@ public class AudioPlayerService extends Service {
             mMainHandler.post(() -> Toast.makeText(
                     this, R.string.audio_player_error, Toast.LENGTH_SHORT
             ).show());
-            exit();
+            stopSelf();
             return true;
         });
         mMediaPlayer.setOnMediaTimeDiscontinuityListener((mp, mts) -> updatePlayback());
@@ -154,7 +154,7 @@ public class AudioPlayerService extends Service {
         final Context context = new ContextThemeWrapper(this, R.style.Theme_AudioPlayer);
         mFloatingWindow = new FloatingWindow(context);
         mFloatingWindow.setOnSettingsViewClickListener(v -> goToSettings());
-        mFloatingWindow.setOnCloseViewClickListener(v -> exit());
+        mFloatingWindow.setOnCloseViewClickListener(v -> stopSelf());
         mFloatingWindow.setOnStateViewClickListener(v -> {
             if (mMediaPlayer != null) {
                 if (mMediaPlayer.isPlaying()) {
@@ -460,10 +460,6 @@ public class AudioPlayerService extends Service {
         final Intent intent = new Intent(this, MainActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
-    }
-
-    private void exit() {
-        stopService(new Intent(this, AudioPlayerService.class));
     }
 
     private static class FloatingWindow extends CardView {
