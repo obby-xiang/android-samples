@@ -17,12 +17,16 @@ import android.graphics.Canvas;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.util.TypedValue;
@@ -69,7 +73,11 @@ public class AudioPlayerService extends Service {
 
     private MediaPlayer mMediaPlayer;
 
-    private boolean mIsMediaPlayerPrepared;
+    private boolean mPlayerPrepared;
+
+    private boolean mPlaybackDelayed;
+
+    private boolean mResumeOnFocusGain;
 
     private FloatingWindow mFloatingWindow;
 
@@ -86,21 +94,75 @@ public class AudioPlayerService extends Service {
 
     private volatile ScheduledFuture<?> mPlaybackPositionUpdateTask;
 
+    private final AudioFocusRequest mAudioFocusRequest =
+            new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(
+                            new AudioAttributes.Builder()
+                                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                                    .build()
+                    )
+                    .setAcceptsDelayedFocusGain(true)
+                    .setOnAudioFocusChangeListener(new AudioManager.OnAudioFocusChangeListener() {
+                        @Override
+                        public void onAudioFocusChange(int focusChange) {
+                            if (mMediaPlayer == null || !mPlayerPrepared) {
+                                return;
+                            }
+
+                            switch (focusChange) {
+                                case AudioManager.AUDIOFOCUS_GAIN:
+                                    if (mPlaybackDelayed || mResumeOnFocusGain) {
+                                        mPlaybackDelayed = false;
+                                        mResumeOnFocusGain = false;
+                                        if (!mMediaPlayer.isPlaying()) {
+                                            mMediaPlayer.start();
+                                            updatePlayback();
+                                        }
+                                    }
+                                    break;
+                                case AudioManager.AUDIOFOCUS_LOSS:
+                                    mResumeOnFocusGain = false;
+                                    mPlaybackDelayed = false;
+                                    if (mMediaPlayer.isPlaying()) {
+                                        mMediaPlayer.pause();
+                                        updatePlayback();
+                                    }
+                                    break;
+                                case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                                case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+                                    mResumeOnFocusGain = mMediaPlayer.isPlaying();
+                                    mPlaybackDelayed = false;
+                                    if (mMediaPlayer.isPlaying()) {
+                                        mMediaPlayer.pause();
+                                        updatePlayback();
+                                    }
+                                    break;
+                            }
+                        }
+                    })
+                    .build();
+
     private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent == null || mMediaPlayer == null || !mIsMediaPlayerPrepared) {
+            if (intent == null || mMediaPlayer == null || !mPlayerPrepared) {
                 return;
             }
 
             final String action = intent.getAction();
-            if (INTENT_ACTION_STATE.equals(action)) {
+            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(action)) {
                 if (mMediaPlayer.isPlaying()) {
                     mMediaPlayer.pause();
-                } else {
-                    mMediaPlayer.start();
+                    updatePlayback();
                 }
-                updatePlayback();
+            } else if (INTENT_ACTION_STATE.equals(action)) {
+                if (mMediaPlayer.isPlaying()) {
+                    mMediaPlayer.pause();
+                    updatePlayback();
+                } else {
+                    startPlayback();
+                }
             } else if (INTENT_ACTION_LOOP.equals(action)) {
                 mMediaPlayer.setLooping(!mMediaPlayer.isLooping());
                 updatePlayback();
@@ -128,6 +190,7 @@ public class AudioPlayerService extends Service {
 
         // Register broadcast receiver
         final IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
         intentFilter.addAction(INTENT_ACTION_STATE);
         intentFilter.addAction(INTENT_ACTION_LOOP);
         intentFilter.addAction(INTENT_ACTION_EXIT);
@@ -135,11 +198,11 @@ public class AudioPlayerService extends Service {
 
         // Create media player
         mMediaPlayer = new MediaPlayer();
+        mMediaPlayer.setWakeMode(this, PowerManager.PARTIAL_WAKE_LOCK);
         mMediaPlayer.setOnPreparedListener(mp -> {
             if (mMediaPlayer != null) {
-                mIsMediaPlayerPrepared = true;
-                mMediaPlayer.start();
-                updatePlayback();
+                mPlayerPrepared = true;
+                startPlayback();
             }
         });
         mMediaPlayer.setOnErrorListener((mp, what, extra) -> {
@@ -159,17 +222,17 @@ public class AudioPlayerService extends Service {
         mFloatingWindow.setOnSettingsViewClickListener(v -> goToSettings());
         mFloatingWindow.setOnCloseViewClickListener(v -> stopSelf());
         mFloatingWindow.setOnStateViewClickListener(v -> {
-            if (mMediaPlayer != null && mIsMediaPlayerPrepared) {
+            if (mMediaPlayer != null && mPlayerPrepared) {
                 if (mMediaPlayer.isPlaying()) {
                     mMediaPlayer.pause();
+                    updatePlayback();
                 } else {
-                    mMediaPlayer.start();
+                    startPlayback();
                 }
-                updatePlayback();
             }
         });
         mFloatingWindow.setOnLoopViewClickListener(v -> {
-            if (mMediaPlayer != null && mIsMediaPlayerPrepared) {
+            if (mMediaPlayer != null && mPlayerPrepared) {
                 mMediaPlayer.setLooping(!mMediaPlayer.isLooping());
                 updatePlayback();
             }
@@ -183,7 +246,7 @@ public class AudioPlayerService extends Service {
             @SuppressLint("RestrictedApi")
             @Override
             public void onStopTrackingTouch(@NonNull Slider slider) {
-                if (mMediaPlayer != null && mIsMediaPlayerPrepared) {
+                if (mMediaPlayer != null && mPlayerPrepared) {
                     mMediaPlayer.seekTo((int) slider.getValue());
                     updatePlayback();
                 }
@@ -226,7 +289,9 @@ public class AudioPlayerService extends Service {
         }
 
         // Set data source to media player
-        mIsMediaPlayerPrepared = false;
+        mPlayerPrepared = false;
+        mPlaybackDelayed = false;
+        mResumeOnFocusGain = false;
         mMediaPlayer.reset();
         try {
             mMediaPlayer.setDataSource(this, uri);
@@ -316,7 +381,7 @@ public class AudioPlayerService extends Service {
             mMediaPlayer.release();
             mMediaPlayer = null;
         }
-        mIsMediaPlayerPrepared = false;
+        mPlayerPrepared = false;
     }
 
     @Nullable
@@ -327,7 +392,7 @@ public class AudioPlayerService extends Service {
 
     @AnyThread
     private void updatePlayback() {
-        if (mMediaPlayer == null || !mIsMediaPlayerPrepared) {
+        if (mMediaPlayer == null || !mPlayerPrepared) {
             return;
         }
 
@@ -374,6 +439,26 @@ public class AudioPlayerService extends Service {
         }
     }
 
+    private void startPlayback() {
+        if (mMediaPlayer == null || !mPlayerPrepared) {
+            return;
+        }
+
+        switch (getSystemService(AudioManager.class).requestAudioFocus(mAudioFocusRequest)) {
+            case AudioManager.AUDIOFOCUS_REQUEST_GRANTED:
+                mPlaybackDelayed = false;
+                mMediaPlayer.start();
+                updatePlayback();
+                break;
+            case AudioManager.AUDIOFOCUS_REQUEST_FAILED:
+                mPlaybackDelayed = false;
+                break;
+            case AudioManager.AUDIOFOCUS_REQUEST_DELAYED:
+                mPlaybackDelayed = true;
+                break;
+        }
+    }
+
     private void schedulePlaybackPositionUpdateTask() {
         if (mPlaybackPositionUpdateTask != null) {
             return;
@@ -383,7 +468,7 @@ public class AudioPlayerService extends Service {
                 return;
             }
             mPlaybackPositionUpdateTask = mScheduledExecutorService.scheduleAtFixedRate(() -> {
-                if (mMediaPlayer != null && mIsMediaPlayerPrepared && mFloatingWindow != null) {
+                if (mMediaPlayer != null && mPlayerPrepared && mFloatingWindow != null) {
                     mFloatingWindow.setTimeLine(
                             mMediaPlayer.getCurrentPosition(), mMediaPlayer.getDuration()
                     );
