@@ -69,6 +69,8 @@ public class AudioPlayerService extends Service {
 
     private MediaPlayer mMediaPlayer;
 
+    private boolean mIsMediaPlayerPrepared;
+
     private FloatingWindow mFloatingWindow;
 
     private NotificationCompat.Builder mNotificationBuilder;
@@ -87,7 +89,7 @@ public class AudioPlayerService extends Service {
     private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent == null || mMediaPlayer == null) {
+            if (intent == null || mMediaPlayer == null || !mIsMediaPlayerPrepared) {
                 return;
             }
 
@@ -135,6 +137,7 @@ public class AudioPlayerService extends Service {
         mMediaPlayer = new MediaPlayer();
         mMediaPlayer.setOnPreparedListener(mp -> {
             if (mMediaPlayer != null) {
+                mIsMediaPlayerPrepared = true;
                 mMediaPlayer.start();
                 updatePlayback();
             }
@@ -156,7 +159,7 @@ public class AudioPlayerService extends Service {
         mFloatingWindow.setOnSettingsViewClickListener(v -> goToSettings());
         mFloatingWindow.setOnCloseViewClickListener(v -> stopSelf());
         mFloatingWindow.setOnStateViewClickListener(v -> {
-            if (mMediaPlayer != null) {
+            if (mMediaPlayer != null && mIsMediaPlayerPrepared) {
                 if (mMediaPlayer.isPlaying()) {
                     mMediaPlayer.pause();
                 } else {
@@ -166,7 +169,7 @@ public class AudioPlayerService extends Service {
             }
         });
         mFloatingWindow.setOnLoopViewClickListener(v -> {
-            if (mMediaPlayer != null) {
+            if (mMediaPlayer != null && mIsMediaPlayerPrepared) {
                 mMediaPlayer.setLooping(!mMediaPlayer.isLooping());
                 updatePlayback();
             }
@@ -180,7 +183,7 @@ public class AudioPlayerService extends Service {
             @SuppressLint("RestrictedApi")
             @Override
             public void onStopTrackingTouch(@NonNull Slider slider) {
-                if (mMediaPlayer != null) {
+                if (mMediaPlayer != null && mIsMediaPlayerPrepared) {
                     mMediaPlayer.seekTo((int) slider.getValue());
                     updatePlayback();
                 }
@@ -223,6 +226,7 @@ public class AudioPlayerService extends Service {
         }
 
         // Set data source to media player
+        mIsMediaPlayerPrepared = false;
         mMediaPlayer.reset();
         try {
             mMediaPlayer.setDataSource(this, uri);
@@ -312,6 +316,7 @@ public class AudioPlayerService extends Service {
             mMediaPlayer.release();
             mMediaPlayer = null;
         }
+        mIsMediaPlayerPrepared = false;
     }
 
     @Nullable
@@ -322,7 +327,7 @@ public class AudioPlayerService extends Service {
 
     @AnyThread
     private void updatePlayback() {
-        if (mMediaPlayer == null) {
+        if (mMediaPlayer == null || !mIsMediaPlayerPrepared) {
             return;
         }
 
@@ -378,7 +383,7 @@ public class AudioPlayerService extends Service {
                 return;
             }
             mPlaybackPositionUpdateTask = mScheduledExecutorService.scheduleAtFixedRate(() -> {
-                if (mMediaPlayer != null && mFloatingWindow != null) {
+                if (mMediaPlayer != null && mIsMediaPlayerPrepared && mFloatingWindow != null) {
                     mFloatingWindow.setTimeLine(
                             mMediaPlayer.getCurrentPosition(), mMediaPlayer.getDuration()
                     );
