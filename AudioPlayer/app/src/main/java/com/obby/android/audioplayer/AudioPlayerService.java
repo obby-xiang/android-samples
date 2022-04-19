@@ -262,7 +262,9 @@ public class AudioPlayerService extends Service {
         );
         mNotificationBuilder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setOngoing(true)
+                .setSilent(true)
+                .setSmallIcon(R.drawable.ic_audio_player)
                 .setContentIntent(contentIntent);
 
         // Create notification channel
