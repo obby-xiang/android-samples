@@ -26,6 +26,29 @@ import {
   ReloadInstructions,
 } from 'react-native/Libraries/NewAppScreen';
 
+import {useTranslation} from 'react-i18next';
+import i18n from './i18n';
+import LocaleManager from './support/LocaleManager';
+
+const onLocaleChanged = (locale: ?string): void => {
+  console.log(`Locale changed, locale = ${locale}`);
+  if (locale) {
+    i18n
+      .changeLanguage(locale)
+      .then(() => {
+        console.log('Successfully to change language');
+      })
+      .catch(error => {
+        console.error('Failed to change language');
+      });
+  }
+};
+
+LocaleManager.addChangeListener(
+  preferences => preferences && onLocaleChanged(preferences.locale),
+);
+LocaleManager.getLocale().then(locale => onLocaleChanged(locale));
+
 const Section = ({children, title}): Node => {
   const isDarkMode = useColorScheme() === 'dark';
   return (
@@ -59,6 +82,8 @@ const App: () => Node = () => {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
   };
 
+  const {t} = useTranslation();
+
   return (
     <SafeAreaView style={backgroundStyle}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
@@ -66,6 +91,7 @@ const App: () => Node = () => {
         contentInsetAdjustmentBehavior="automatic"
         style={backgroundStyle}>
         <Header />
+        <Text>{t('app_name')}</Text>
         <View
           style={{
             backgroundColor: isDarkMode ? Colors.black : Colors.white,
