@@ -1,4 +1,4 @@
-package com.fooproject.newarchitecture;
+package com.example.monorepo.newarchitecture;
 
 import android.app.Application;
 import androidx.annotation.NonNull;
@@ -19,9 +19,9 @@ import com.facebook.react.fabric.FabricJSIModuleProvider;
 import com.facebook.react.fabric.ReactNativeConfig;
 import com.facebook.react.shell.MainReactPackage;
 import com.facebook.react.uimanager.ViewManagerRegistry;
-import com.fooproject.BuildConfig;
-import com.fooproject.newarchitecture.components.MainComponentsRegistry;
-import com.fooproject.newarchitecture.modules.MainApplicationTurboModuleManagerDelegate;
+import com.example.monorepo.BuildConfig;
+import com.example.monorepo.newarchitecture.components.MainComponentsRegistry;
+import com.example.monorepo.newarchitecture.modules.MainApplicationTurboModuleManagerDelegate;
 import java.util.ArrayList;
 import java.util.List;
 
