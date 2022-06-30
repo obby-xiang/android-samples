@@ -2,7 +2,6 @@ package com.fooproject.newarchitecture;
 
 import android.app.Application;
 import androidx.annotation.NonNull;
-import com.facebook.react.PackageList;
 import com.facebook.react.ReactInstanceManager;
 import com.facebook.react.ReactNativeHost;
 import com.facebook.react.ReactPackage;
@@ -18,6 +17,7 @@ import com.facebook.react.fabric.ComponentFactory;
 import com.facebook.react.fabric.CoreComponentsRegistry;
 import com.facebook.react.fabric.FabricJSIModuleProvider;
 import com.facebook.react.fabric.ReactNativeConfig;
+import com.facebook.react.shell.MainReactPackage;
 import com.facebook.react.uimanager.ViewManagerRegistry;
 import com.fooproject.BuildConfig;
 import com.fooproject.newarchitecture.components.MainComponentsRegistry;
@@ -44,13 +44,14 @@ public class MainApplicationReactNativeHost extends ReactNativeHost {
 
   @Override
   protected List<ReactPackage> getPackages() {
-    List<ReactPackage> packages = new PackageList(this).getPackages();
+    List<ReactPackage> packages = new ArrayList<>();
     // Packages that cannot be autolinked yet can be added manually here, for example:
     //     packages.add(new MyReactNativePackage());
     // TurboModules must also be loaded here providing a valid TurboReactPackage implementation:
     //     packages.add(new TurboReactPackage() { ... });
     // If you have custom Fabric Components, their ViewManagers should also be loaded here
     // inside a ReactPackage.
+    packages.add(new MainReactPackage());
     return packages;
   }
 
